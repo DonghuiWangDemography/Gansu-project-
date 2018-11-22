@@ -3,6 +3,8 @@
 *Task : data cleaning & management
 *Nptes: Derived from Datamanagement_v2.do; revise codes
 
+//ssc install unique
+// ssc install egenmore
 clear all 
 clear matrix 
 set more off 
@@ -20,6 +22,7 @@ global cog00 "${dir}\data\2000\litracy2000t.dta"
 global test00 "${dir}\data\2000\achieve2000t.dta"
 global c09 "${dir}\data\2009\child2009t.dta"
 
+global cross "${dir}\data\GSCF_merge_pid_to2009.dta"
 use $hh00 ,clear
 
 g villid=a1*10000+a2*100+a3
@@ -37,8 +40,8 @@ g med=h0110_03 if  h0102_03==3 //
 g milliter=(h0111_03==1|h0112_03==1) if h0102_03==3 
 g momstay=h0115_03  if h0102_03==3 
 
-//g roadkm=h1101_01  // distance to the nearest public road in km
-//g roadmin=h1102_01 // distance to the nearest public road in minitus 
+g roadkm=h1101_01  // distance to the nearest public road in km
+g roadmin=h1102_01 // distance to the nearest public road in minitus 
 
 // count siblings
 local sib "h0102_04 h0102_05 h0102_06 h0102_07 h0102_08 h0102_09 h0102_10 h0102_11 h0102_13 h0102_14 h0102_15"
@@ -68,6 +71,23 @@ g wealth=house+tgoods
 g lwealth=log(wealth)
 *histogram  lwealth
 
-keep  hhid villid osex obirth oethnic  health *birth *ed *illiter *stay road* lwealth sibling
-unique hhid 
-sort hhid villid
+keep  hhid villid osex obirth oethnic  *birth *ed *illiter *stay road* lwealth sibling
+save "${dir}\hh00.dta" , replace 
+
+use $c09, clear
+
+
+use $c00, clear
+merge 1:1 hhid using $cog00, nogen 
+merge 1:1 hhid using $test00, nogen
+merge 1:1 hhid using "${dir}\hh00.dta", nogen
+merge m:1 villid using $vill00, nogen 
+
+merge 1:m hhid pid00  using $cross , keep(matched) // all merged
+merge 1:1 hhid  using $c09, nogen  // 1859 matched
+
+keep if samekid0009==1   // N =1728
+
+save "${dir}\data\00_09.dta" , replace 
+
+erase "${dir}\hh00.dta"
