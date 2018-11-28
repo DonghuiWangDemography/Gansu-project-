@@ -1,7 +1,7 @@
 *Project: Gansu survey of Children and family;
 *Created 11/21/2018
 *Task : data cleaning & management
-*Nptes: Derived from Datamanagement_v2.do; revise codes
+*Notes: Derived from Datamanagement_v2.do; revise codes
 
 //ssc install unique
 // ssc install egenmore
@@ -84,6 +84,13 @@ g lwealth=log(wealth)
 keep  hhid villid osex obirth oethnic  *birth  *sch *stay road* lwealth sibling
 save "${dir}\hh00.dta" , replace 
 
+use $c09, clear
+foreach v of varlist _all {
+rename `v' `v'_09
+}
+rename hhid_09 hhid 
+tempfile c09new
+save `c09new.dta' 
 
 use $c00, clear
 merge 1:1 hhid using $cog00, nogen 
@@ -92,8 +99,7 @@ merge 1:1 hhid using "${dir}\hh00.dta", nogen
 merge m:1 villid using $vill00, nogen 
 
 merge 1:m hhid pid00  using $cross , keep(matched) // all merged
-merge 1:1 hhid  using $c09, nogen  // 1859 matched
-
+merge 1:1 hhid  using  `c09new.dta', nogen  // 1859 matched
 keep if samekid0009==1   // N =1728
 
 save "${dir}\data\00_09.dta" , replace 
