@@ -118,6 +118,93 @@ tab _Best_Index
 
 
 
+
+*======================================= final model: 7 class ===========================
+discard
+doLCA sch12-mig19, ///
+      nclass(7) ///
+	  id(hhid)   ///
+	  seed(100000) ///
+	  seeddraws(10000) ///
+	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) ///
+	  criterion(0.000001)  ///
+      rhoprior(1.0)   
+return list
+	  
+mat C=r(rho) 
+mat gamma=r(gamma)
+mat list gamma
+
+tab _Best_Index
+
+
+
+tab _Best_Index, gen(pa)
+rename pa2 localhigh
+rename pa6 movehigh
+rename pa5 inact
+rename pa3 workmove
+rename pa7 earlymove
+rename pa1 vet
+rename pa4 finlate
+
+la var localhigh  "Local high school attenders"
+la var movehigh   "Move for high school"
+la var inact      "Inactive"
+la var workmove   "Move for work"
+la var earlymove  "Early movers"
+la var vet        "Move for VET"
+la var finlate    "Late finishers"
+
+la  def pa 1 "Move for VET" 2"Local high school attenders" 3"Move for work"  ///
+        4 "Late finishers" 5"Inactive" 6 "Move for high school" 7  "Early movers"
+la val _Best_Index pa
+
+//ref: local high school attenders 
+//local dv "female asp2 asp3 asp4 future2 esteem2"  // interaction with local opportunity:insig
+local dv "female asp2 asp3 asp4 future2 esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle"  // interaction with local opportunity:insig
+mlogit _Best_Index `dv', rrr baseoutcome(2) 
+esttab using "$Tables\mlogit.rtf", eform ci(%9.2f) replace  la
+//esttab , eform ci(%9.2f)
+
+mlogit _Best_Index female asp2##c.lwealth asp3##c.lwealth  asp4##c.lwealth  esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle
+mlogit _Best_Index female asp2##c.peduc asp3##c.peduc  asp4##c.peduc  esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle
+
+margins, dydx(*) post
+esttab using "$Tables\margin.rtf", wide label replace 
+
+
+// baseline : local high 
+local iv "female lwealth renzhi asp4 esteem2"
+foreach x of local iv {
+coefplot (,  keep (`x':2._predict ))  ///
+		 (,  keep (`x':6._predict) )  ///
+	     (,  keep (`x':5._predict))  ///
+         (,  keep (`x':3._predict ) )  ///
+ 		 (,  keep (`x':7._predict))  ///
+		 (,  keep (`x':1._predict) )  ///
+		 (,  keep (`x':4._predict))  ///
+		 , yline(0) legend(off)  vertical   ///
+		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  4"Move for work"    ///
+                  5 "Early movers"  6 "Move for VET" 7 "Late finishers" ) ///
+		 title(Estimated marginal effect of `x' on transition pathways)
+graph save Graph "$graph\mlogit_`x'.gph" , replace
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 *=============graph=============
 mat age =(12\13\14\15\16\17\18\19)
 mat list age
