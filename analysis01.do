@@ -22,25 +22,29 @@ cd "C:\Users\donghuiw\Desktop\GansuChildren\data"  // need to specify cd in orde
 
 use "${data}\lca.dta", replace
 
-
 * use stata plug in 
 forvalues i=12/19{
 replace sch`i'= sch`i'+1
 replace mig`i'= mig`i'+1
 replace work`i'= work`i'+1
 }
+// g 		sex=1 if female==0
+// replace sex=2 if female==1  
+
+*keep if female==1
 
 discard
 
 
 forvalues i=2/10{
 discard
-doLCA sch12-mig19, ///
-      nclass(`i') ///
-	  seed(100000) ///
-	  seeddraws(100000) ///
+doLCA sch12-mig19, 			///
+      nclass(`i') 			///
+	  seed(100000) 			///
+	  seeddraws(100000) 	///
 	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) ///
 	  criterion(0.000001)  ///
+	  clusters(villid)    ///
 	  rhoprior(1.0)
 	  	  
 scalar entropy_`i'=r(EntropyRsqd)
@@ -51,6 +55,7 @@ scalar adjBIC_`i'=r(AdjustedBIC)
 *scalar ll_`i'=r(loglikelihood)
 }
 
+
 numlist "2/10"
 local stats "Gsquared AIC BIC adjBIC entropy"
 local n :word count `r(numlist)'
@@ -58,7 +63,6 @@ mat stats=J(`n',5,-99)
 mat colnames stats=`stats'
 mat rownames stats=`r(numlist)'
 mat list stats
-
 
 
 forvalues i=2/10{
@@ -84,32 +88,53 @@ gen nclass=_n+1 if AIC !=.
 			 
 *graph save Graph "$graph\fit_v4.gph" , replace 
 
-*===========lca with covariate=============
-* trace on 
-local dv "female lwealth peduc sib age renzhi "  // interaction with local opportunity:insig
+*note : bootstrap method is not avaiable for measurements use more than 2 items. 
+
+/*measurement invariance test 
+discard 
+#delimit ;
+doLCA sch12-mig19, 					
+      nclass(7) 					
+	  groups(sex) 					
+	  groupnames("male female") 
+	  measurement("groups")
+	  seed(100000) 			  
+	  seeddraws(100000) 	
+	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) 
+	  criterion(0.000001)  
+	  weight(attw)        
+	  rhoprior(1.0) ;
+#delimit cr
+return list
+*/
+	  
+
+
+*===========final model =============
+
+
+*set trace on 
 discard
-doLCA sch12-mig19, ///
-      nclass(7) ///
+doLCA sch12-mig19,  ///
+      nclass(7)   ///
 	  id(hhid)   ///
-	  seed(100089) ///
-	  seeddraws(10000) ///
-	  covariates(`dv') 	///
+	  seed(100000) ///
+	  seeddraws(100000) ///
 	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) ///
-	  binary(2)	///
-	  criterion(0.000001)  ///
-      rhoprior(1.0)   ///
-	  betaprior(1)  ///
+	  criterion(0.000001)  	///
+	  clusters(villid)    ///
+      rhoprior(1.0)   		///
 	  nstarts (3)  
 return list
 *set trace off
 	  
 mat C=r(rho) 
 mat gamma=r(gamma)
-mat odds=r(odds_ratio)
-mat p=r(p_value)
-mat rownames  p= `dv'
-mat list p
-mat list odds
+*mat odds=r(odds_ratio)
+*mat p=r(p_value)
+*mat rownames  p= `dv'
+*mat list p
+*mat list odds
 
 
 mat list C
@@ -117,86 +142,40 @@ mat list gamma ,format(%9.3f)
 tab _Best_Index
 
 
-
-
-*======================================= final model: 7 class ===========================
-discard
-doLCA sch12-mig19, ///
-      nclass(7) ///
-	  id(hhid)   ///
-	  seed(100000) ///
-	  seeddraws(10000) ///
-	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) ///
-	  criterion(0.000001)  ///
-      rhoprior(1.0)   
-return list
-	  
-mat C=r(rho) 
-mat gamma=r(gamma)
-mat list gamma
-
-tab _Best_Index
-
-
-
-tab _Best_Index, gen(pa)
-rename pa2 localhigh
-rename pa6 movehigh
-rename pa5 inact
-rename pa3 workmove
-rename pa7 earlymove
-rename pa1 vet
-rename pa4 finlate
-
-la var localhigh  "Local high school attenders"
-la var movehigh   "Move for high school"
-la var inact      "Inactive"
-la var workmove   "Move for work"
-la var earlymove  "Early movers"
-la var vet        "Move for VET"
-la var finlate    "Late finishers"
-
-la  def pa 1 "Move for VET" 2"Local high school attenders" 3"Move for work"  ///
-        4 "Late finishers" 5"Inactive" 6 "Move for high school" 7  "Early movers"
-la val _Best_Index pa
-
-//ref: local high school attenders 
-//local dv "female asp2 asp3 asp4 future2 esteem2"  // interaction with local opportunity:insig
-local dv "female asp2 asp3 asp4 future2 esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle"  // interaction with local opportunity:insig
-mlogit _Best_Index `dv', rrr baseoutcome(2) 
-esttab using "$Tables\mlogit.rtf", eform ci(%9.2f) replace  la
-//esttab , eform ci(%9.2f)
-
-mlogit _Best_Index female asp2##c.lwealth asp3##c.lwealth  asp4##c.lwealth  esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle
-mlogit _Best_Index female asp2##c.peduc asp3##c.peduc  asp4##c.peduc  esteem2 lwealth peduc age renzhi vnonaghh vhighsch vtech vnearmiddle
-
-margins, dydx(*) post
-esttab using "$Tables\margin.rtf", wide label replace 
-
-
-// baseline : local high 
-local iv "female lwealth renzhi asp4 esteem2"
-foreach x of local iv {
-coefplot (,  keep (`x':2._predict ))  ///
-		 (,  keep (`x':6._predict) )  ///
-	     (,  keep (`x':5._predict))  ///
-         (,  keep (`x':3._predict ) )  ///
- 		 (,  keep (`x':7._predict))  ///
-		 (,  keep (`x':1._predict) )  ///
-		 (,  keep (`x':4._predict))  ///
-		 , yline(0) legend(off)  vertical   ///
-		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  4"Move for work"    ///
-                  5 "Early movers"  6 "Move for VET" 7 "Late finishers" ) ///
-		 title(Estimated marginal effect of `x' on transition pathways)
-graph save Graph "$graph\mlogit_`x'.gph" , replace
-}
-
-
-
-
-
-
-
+// local dv "zfa zvedu zvmig zvinf"  // interaction with local opportunity:insig
+// discard
+// #delimit;
+// doLCA sch12-mig19, 
+//       nclass(7) 
+// 	  id(hhid)   
+// 	  seed(100089) 
+// 	  seeddraws(10000) 
+// 	  groups(sex) 
+// 	  groupnames ("male female")
+//       measurement("groups")
+// 	  covariates(`dv') 	
+// 	  reference(1)
+// 	  categories(5 5 5 5 5 5 5 5 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2) 
+// 	  criterion(0.000001)  
+//       rhoprior(1.0)   
+// 	  betaprior(1)  
+// 	  nstarts (3) ; 
+// #delimit cr	 
+// return list
+//	  
+// mat C=r(rho) 
+// mat gamma=r(gamma)
+// mat odds=r(odds_ratio)
+// mat p=r(p_value)
+// mat rownames  p= `dv'
+// mat list p
+// mat list odds
+// mat cov=r
+//
+// mat list C
+// mat list gamma ,format(%9.3f) 
+// tab _Best_Index
+//
 
 
 
@@ -209,7 +188,6 @@ graph save Graph "$graph\mlogit_`x'.gph" , replace
 mat age =(12\13\14\15\16\17\18\19)
 mat list age
 local role "work mig"
-//foreach x of local gender{
 forvalues i=1/7{
 foreach v of local role {
 mat C`i'`v'=C["`v'1221".."`v'1921",`i']
@@ -246,8 +224,153 @@ svmat C`i', names (col)
 }
 
 
-grc1leg "c2" "c6" "c5" "c3"  "c7"  "c1" "c4",  ///
+grc1leg "c1" "c2" "c3" "c4"  "c5"  "c6" "c7",  ///
 legendfrom(c1) ring(0) pos(4) span
+
+
+*c1: move for vet
+*c2: early mover 
+*c3: move for work 
+*c4: late finisher
+*c5: move for high school
+*c6: local high school
+*c7: inactive 
+
+grc1leg "c6" "c5" "c7"  ///
+		"c3" "c2" "c1" "c4",  ///
+legendfrom(c1) ring(0) pos(4) span
+
+// graph save Graph "$images\rho_total.gph" , replace 
+// graph export "$images\rho_total.png", replace
+
+
+*================multinomial anlaysis============================
+tab _Best_Index, gen(pa)
+// rename pa1 finlate
+// rename pa2 vet
+// rename pa3 earlymove
+// rename pa4 localhigh
+// rename pa5 movehigh
+// rename pa6 workmove
+
+rename pa1 vet
+rename pa2 earlymove
+rename pa3 workmove
+rename pa4 finlate
+rename pa5 movehigh
+rename pa6 localhigh
+rename pa7 inact
+
+la var localhigh  "Local high school attenders"
+la var movehigh   "Move for high school"
+la var workmove   "Move for work"
+la var earlymove  "Early movers"
+la var vet        "Move for VET"
+la var finlate    "Late finishers"
+la var inact      "Inactive"
+
+recode _Best_Index (6=1 "Local high school attenders") (5=2 "Move for high school") (7=3 "Move for work")   ///
+				   (3=4 "Early movers") (2=5 "Move for VET") (1=6 "Late finishers") (4=7 "Inactive"), gen(class) 
+
+				   
+*other labels
+la var ed2 "Aspire high school"				   
+la var ed3 "Aspire VET"				   
+la var ed4 "Aspire College"				   
+
+bysort qwealth: sum lwealth 
+
+
+
+*============multinomial logit===============
+
+
+mlogit class female zfa zvedu zvmig zvinf $ctr [aw=attw],  baseoutcome(7) vce(cluster villid) 
+esttab using "$tables\model1_pca_b6.rtf" , b(%9.2f) se(%9.2f)   wide replace  la
+
+*descriptives
+la var female "Female"
+la var lwealth "Household wealth(log transformed)"
+la var peduc "Parental eudcation"
+la var vnonaghh "Non-ag employment"
+la var vncomp "Local enterprises"
+la var vroades "Roades"
+la var vprimaryr "Primary school attendence rate"
+la var vmiddler "Middle school progression rates"
+la var vhighr "High school progression rates"
+la var age "Age"
+la var goodhlth "Self-rated health"
+
+local dv "female lwealth peduc vnonaghh vncomp vroades  vprimaryr vmiddler vhighr age goodhlth"  // interaction with local opportunity:insig
+estpost summarize `dv'
+// esttab using "${tables}\descriptive.rtf", cells ("mean(fmt(2)) sd (fmt(2))")  label replace 
+esttab using "${tables}\descriptive.rtf", main(mean) aux(sd) nostar unstack label replace 
+
+
+global ctr "age goodhlth "
+mlogit class female zfa zvedu zvmig zvinf $ctr [aw=attw],  baseoutcome(1) vce(cluster villid) 
+*esttab using "$tables\model1_pca_b6.rtf" , b(%9.2f) se(%9.2f)   wide replace  la
+
+mlogit class i.female i.female#c.zfa i.female#c.zvedu i.female#c.zvmig i.female#c.zvinf $ctr [aw=attw],  baseoutcome(1) vce(cluster villid) 
+margins, dydx(zfa zvedu zvmig zvinf) subpop(if female==0) post
+estimates store male 
+
+
+mlogit class i.female i.female#c.zfa i.female#c.zvedu i.female#c.zvmig i.female#c.zvinf $ctr [aw=attw],  baseoutcome(1) vce(cluster villid) 
+margins, dydx(zfa zvedu zvmig zvinf) subpop(if female==1) post
+estimates store female 
+
+set scheme plotplainblind 
+local iv "zfa zvedu zvmig zvinf"
+foreach x of local iv {
+#delimit;
+coefplot ( male,  keep (`x':1._predict )) (female ,  keep (`x':1._predict ))     
+		 ( male,  keep (`x':2._predict )) (female ,  keep (`x':2._predict )) 
+	     ( male,  keep (`x':3._predict))  (female ,  keep (`x':3._predict ))	 	
+         ( male,  keep (`x':4._predict )) (female ,  keep (`x':4._predict ))	
+ 		 ( male,  keep (`x':5._predict))  (female ,  keep (`x':5._predict ))	 
+		 ( male,  keep (`x':6._predict)) (female ,  keep (`x':6._predict ))	
+		 ( male,  keep (`x':7._predict))  (female ,  keep (`x':7._predict ))	
+		 , yline(0) legend(off)  vertical   		
+		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  
+		         4"Move for work" 5 "Early movers"  6 "Move for VET" 7 "Late finishers" , angle(45))
+		 title(Estimated marginal effect of `x' on transition pathways);
+		graph save Graph "$images\mlogit_`x'_gender.gph" , replace;
+#delimit cr	  	
+}
+
+
+
+
+
+
+local iv "zfa zvedu zvinf "
+foreach x of local iv {
+coefplot (,  keep (`x':1._predict ))     ///
+		 (,  keep (`x':2._predict) )  	///
+	     (,  keep (`x':3._predict)) 	 ///
+         (,  keep (`x':4._predict ) )  	///
+ 		 (,  keep (`x':5._predict))  	///
+		 (,  keep (`x':6._predict) )  	///
+		 (,  keep (`x':7._predict))  	///
+		 , yline(0) legend(off)  vertical   ///
+		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  ///
+		         4"Move for work" 5 "Early movers"  6 "Move for VET" 7 "Late finishers" ) ///
+		 title(Estimated marginal effect of `x' on transition pathways)
+graph save Graph "$images\mlogit_`x'.gph" , replace
+}
+
+graph use "$images\mlogit_female.gph"
+
+graph use "$images\mlogit_zfa.gph"
+graph use "$images\mlogit_zvedu.gph"
+graph use "$images\mlogit_zvinf.gph"
+
+
+
+
+grc1leg "$images\mlogit_female.gph" "$images\mlogit_zfa.gph"
+
 
 
 
