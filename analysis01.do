@@ -28,10 +28,8 @@ replace sch`i'= sch`i'+1
 replace mig`i'= mig`i'+1
 replace work`i'= work`i'+1
 }
-// g 		sex=1 if female==0
-// replace sex=2 if female==1  
 
-*keep if female==1
+
 
 discard
 
@@ -55,7 +53,7 @@ scalar adjBIC_`i'=r(AdjustedBIC)
 *scalar ll_`i'=r(loglikelihood)
 }
 
-
+* create matrix to store model fit statistics 
 numlist "2/10"
 local stats "Gsquared AIC BIC adjBIC entropy"
 local n :word count `r(numlist)'
@@ -75,6 +73,7 @@ mat stats[`i'-1,5]= entropy_`i'
 mat list stats, format (%9.3f)
 
 
+*graph model fit stats 
 
 svmat stats, names (col)
 gen nclass=_n+1 if AIC !=.
@@ -246,31 +245,10 @@ legendfrom(c1) ring(0) pos(4) span
 
 *================multinomial anlaysis============================
 tab _Best_Index, gen(pa)
-// rename pa1 finlate
-// rename pa2 vet
-// rename pa3 earlymove
-// rename pa4 localhigh
-// rename pa5 movehigh
-// rename pa6 workmove
 
-rename pa1 vet
-rename pa2 earlymove
-rename pa3 workmove
-rename pa4 finlate
-rename pa5 movehigh
-rename pa6 localhigh
-rename pa7 inact
 
-la var localhigh  "Local high school attenders"
-la var movehigh   "Move for high school"
-la var workmove   "Move for work"
-la var earlymove  "Early movers"
-la var vet        "Move for VET"
-la var finlate    "Late finishers"
-la var inact      "Inactive"
-
-recode _Best_Index (6=1 "Local high school attenders") (5=2 "Move for high school") (7=3 "Move for work")   ///
-				   (3=4 "Early movers") (2=5 "Move for VET") (1=6 "Late finishers") (4=7 "Inactive"), gen(class) 
+recode _Best_Index (6=1 "Local high school attenders") (5=2 "Move for high school") (7=3 "Inactive")   ///
+				   (3=4 "Move for work") (2=5 "Early movers") (1=6 "Move for VET") (4=7 "Late finishers"), gen(class) 
 
 				   
 *other labels
@@ -312,6 +290,7 @@ mlogit class female zfa zvedu zvmig zvinf $ctr [aw=attw],  baseoutcome(1) vce(cl
 *esttab using "$tables\model1_pca_b6.rtf" , b(%9.2f) se(%9.2f)   wide replace  la
 
 mlogit class i.female i.female#c.zfa i.female#c.zvedu i.female#c.zvmig i.female#c.zvinf $ctr [aw=attw],  baseoutcome(1) vce(cluster villid) 
+esttab using "$tables\model2_genderinteraction.rtf" , b(%9.2f) se(%9.2f)  replace  la
 margins, dydx(zfa zvedu zvmig zvinf) subpop(if female==0) post
 estimates store male 
 
@@ -324,41 +303,53 @@ set scheme plotplainblind
 local iv "zfa zvedu zvmig zvinf"
 foreach x of local iv {
 #delimit;
-coefplot ( male,  keep (`x':1._predict )) (female ,  keep (`x':1._predict ))     
-		 ( male,  keep (`x':2._predict )) (female ,  keep (`x':2._predict )) 
-	     ( male,  keep (`x':3._predict))  (female ,  keep (`x':3._predict ))	 	
-         ( male,  keep (`x':4._predict )) (female ,  keep (`x':4._predict ))	
- 		 ( male,  keep (`x':5._predict))  (female ,  keep (`x':5._predict ))	 
-		 ( male,  keep (`x':6._predict)) (female ,  keep (`x':6._predict ))	
-		 ( male,  keep (`x':7._predict))  (female ,  keep (`x':7._predict ))	
-		 , yline(0) legend(off)  vertical   		
+coefplot ( male, label(Male)  pstyle(p3)  keep (`x':1._predict )) (female , label(Female) pstyle(p4) keep (`x':1._predict ))     
+		 ( male, pstyle(p3)  keep (`x':2._predict )) (female , pstyle(p4) keep (`x':2._predict )) 
+	     ( male, pstyle(p3)  keep (`x':3._predict))  (female , pstyle(p4) keep (`x':3._predict ))	 	
+         ( male, pstyle(p3)  keep (`x':4._predict )) (female , pstyle(p4) keep (`x':4._predict ))	
+ 		 ( male, pstyle(p3)  keep (`x':5._predict))  (female , pstyle(p4) keep (`x':5._predict ))	 
+		 ( male, pstyle(p3)  keep (`x':6._predict)) (female , pstyle(p4)  keep (`x':6._predict ))	
+		 ( male, pstyle(p3)  keep (`x':7._predict))  (female , pstyle(p4) keep (`x':7._predict ))	
+		 , yline(0) legend(on)  vertical   		
 		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  
 		         4"Move for work" 5 "Early movers"  6 "Move for VET" 7 "Late finishers" , angle(45))
-		 title(Estimated marginal effect of `x' on transition pathways);
+		 title(`x') ;
 		graph save Graph "$images\mlogit_`x'_gender.gph" , replace;
 #delimit cr	  	
 }
 
+*lock legend 
+graph use "$images\mlogit_zfa_gender.gph"
+graph export "$images\mlogit_zfa_gender.png"
 
 
+graph use "$images\mlogit_zvedu_gender.gph"
+graph export "$images\mlogit_zvedu_gender.png", replace 
 
 
+grc1leg "$images\mlogit_zfa_gender.gph" "$images\mlogit_zvedu_gender.gph"   
 
-local iv "zfa zvedu zvinf "
-foreach x of local iv {
-coefplot (,  keep (`x':1._predict ))     ///
-		 (,  keep (`x':2._predict) )  	///
-	     (,  keep (`x':3._predict)) 	 ///
-         (,  keep (`x':4._predict ) )  	///
- 		 (,  keep (`x':5._predict))  	///
-		 (,  keep (`x':6._predict) )  	///
-		 (,  keep (`x':7._predict))  	///
-		 , yline(0) legend(off)  vertical   ///
-		 xlabel ( 1 "Local high school" 2 "Move for high school" 3"Inactive"  ///
-		         4"Move for work" 5 "Early movers"  6 "Move for VET" 7 "Late finishers" ) ///
-		 title(Estimated marginal effect of `x' on transition pathways)
-graph save Graph "$images\mlogit_`x'.gph" , replace
-}
+
+graph use "$images\mlogit_zvmig_gender.gph"
+
+graph use "$images\mlogit_zvinf_gender.gph"
+
+
+ graph export "$images\mlogit_zfa_gender.png"
+
+
+grc1leg "$images\mlogit_zfa_gender.gph" "$images\mlogit_zvedu_gender.gph"   ///
+		"$images\mlogit_zvmig_gender.gph" "$images\mlogit_zvinf_gender.gph" , ///
+         ring(0) pos(4) span
+
+ 
+graph combine "$images\mlogit_zfa_gender.gph" "$images\mlogit_zvedu_gender.gph"   ///
+		"$images\mlogit_zvmig_gender.gph" "$images\mlogit_zvinf_gender.gph" 
+
+graph use "C:\Users\donghuiw\Desktop\GansuChildren\images\Graph_combine_mlogit.gph"	
+graph export "$images\Graph_combine_mlogit.png"	,replace 
+
+	
 
 graph use "$images\mlogit_female.gph"
 
